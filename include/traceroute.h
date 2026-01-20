@@ -5,4 +5,11 @@
 # include <stdlib.h>
 # include <string.h>
 
+# define COMMON_OPTSTR "h"
+
+typedef struct s_trace
+{
+	char *addr;
+} t_trace;
+
 #endif

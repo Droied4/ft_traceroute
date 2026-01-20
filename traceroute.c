@@ -1,9 +1,16 @@
 #include "traceroute.h" 
 
-static int error(int error_code, char *msg)
+static void safeExit(t_trace *t)
+{
+	if (t->addr)
+		free(t->addr);
+	exit(1);
+}
+
+static void error(char *msg, t_trace *t)
 {
 	dprintf(2, "traceroute: %s\n", msg);
-	return (error_code);
+	safeExit(t);
 }
 
 static void usage(void)
@@ -14,6 +21,47 @@ static void usage(void)
 		  "-h \t\t display help\n"
 		  );
 	exit(1);
+}
+
+static char options_allowed(char *str, char ch)
+{
+	for (unsigned int i = 0; i < strlen(str); ++i)
+	{
+		if (str[i] == ch)
+			return (ch);
+	}
+	return (1);
+}
+
+static char mini_getopt(int ac, char *av[], char *str)
+{
+	for (int i = 0; i < ac; ++i)
+	{
+		for (unsigned int j = 0; j < strlen(av[i]); ++j)
+		{
+			if (av[i][j] == '-')
+				return 	(options_allowed(str, av[i][j + 1]));
+		}
+	}
+	return (0);
+}
+
+static void flagCases(int ac, char *av[], t_trace *t)
+{
+	int ch;
+
+	ch = mini_getopt(ac, av, COMMON_OPTSTR);
+	switch (ch)
+	{
+		case 0: 
+			break ;
+		case 1:
+			error("bad option", t);
+			break ;
+		case 'h':
+			usage();
+			break ;
+	}
 }
 
 static int getAddr(char *av[])
@@ -35,18 +83,24 @@ static int getAddr(char *av[])
 	return (i);
 }
 
-static void traceroute(int ac, char *av[]) 
+static void init(char *av[], t_trace *t)
 {
-	int pos;
-	char *addr;
-	(void)ac;
+	int pos = 0;
 
 	pos = getAddr(av);	
-	addr = strdup(av[pos]);
-	if (!addr)
-		error(1, "FUCK");
-	printf("addr-> %s\n", addr);
-	free(addr);
+	t->addr = strdup(av[pos]);
+	if (!t->addr)
+		error("malloc error", t);
+}
+
+static void traceroute(int ac, char *av[]) 
+{
+	t_trace t;
+
+	init (av, &t);
+	flagCases(ac, av, &t);
+	printf("addr-> %s\n", t.addr);
+	safeExit(&t);
 }
 
 int main (int ac, char *av[])

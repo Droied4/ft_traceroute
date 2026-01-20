@@ -2,6 +2,7 @@
 # define TRACEROUTE_H 
 
 # include <stdio.h>
+# include <unistd.h>
 # include <stdlib.h>
 # include <string.h>
 # include <sys/types.h>
@@ -29,8 +30,10 @@ typedef struct s_trace
 	char *ip_name;
 	char ip_addr[INET_ADDRSTRLEN];
 	struct addrinfo *info_addr;
+	int send_sock;
+	int recv_sock;
 	int pkg_bytes;
 	int hops;
-} t_trace;
+	} t_trace;
 
 #endif

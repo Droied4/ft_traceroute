@@ -4,6 +4,16 @@ static void safeExit(t_trace *t)
 {
 	if (t->ip_name)
 		free(t->ip_name);
+	if (t->send_sock > 0)
+	{
+		close(t->send_sock);	
+		t->send_sock = -1;
+	}
+	if (t->recv_sock > 0)
+	{
+		close(t->recv_sock);	
+		t->recv_sock = -1;
+	}
 	freeaddrinfo(t->info_addr);
 	exit(1);
 }
@@ -84,6 +94,16 @@ static int getAddr(char *av[])
 	return (i);
 }
 
+static int open_socket(t_trace *t, int sock_type, int sock_protocol)
+{
+	int sock_fd;
+
+	sock_fd = socket(AF_INET, sock_type, sock_protocol); 
+	if (sock_fd < 1)
+		error("socket file descriptor not received", t);
+	return (sock_fd);
+}
+
 static void init(char *av[], t_trace *t)
 {
 	int pos = 0;
@@ -92,6 +112,8 @@ static void init(char *av[], t_trace *t)
 	t->ip_name = strdup(av[pos]);
 	if (!t->ip_name)
 		error("malloc error", t);
+	t->send_sock = open_socket(t, SOCK_DGRAM, IPPROTO_UDP);
+	t->recv_sock = open_socket(t, SOCK_RAW, IPPROTO_ICMP);
 	t->hops = 30;
 	t->pkg_bytes = 60;
 }
@@ -123,7 +145,6 @@ static void traceroute(int ac, char *av[])
 	flagCases(ac, av, &t);
 	if (dns_resolver(t.ip_name, t.ip_addr, &t.info_addr) == 1)
 		safeExit(&t);
-	//open_socket();
 	trace(&t);
 	safeExit(&t);
 }
@@ -132,6 +153,11 @@ int main (int ac, char *av[])
 {
 	if (ac != 1)
 	{
+		if (getuid())
+		{
+			printf("traceroute: should be executed with root permision\n");
+			return (1);
+		}
 		traceroute(ac, av);
 		return (0);
 	} 

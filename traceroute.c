@@ -92,6 +92,8 @@ static void init(char *av[], t_trace *t)
 	t->ip_name = strdup(av[pos]);
 	if (!t->ip_name)
 		error("malloc error", t);
+	t->hops = 30;
+	t->pkg_bytes = 60;
 }
 
 static int dns_resolver(char *domain, char *ipstr, struct addrinfo **info)
@@ -108,6 +110,11 @@ static int dns_resolver(char *domain, char *ipstr, struct addrinfo **info)
 	return (0);
 }
 
+static void trace(t_trace *t)
+{
+	printf("traceroute to %s (%s), %i hops max, %i bytes packets\n", t->ip_name, t->ip_addr, t->hops, t->pkg_bytes);
+}
+
 static void traceroute(int ac, char *av[]) 
 {
 	t_trace t;
@@ -116,7 +123,8 @@ static void traceroute(int ac, char *av[])
 	flagCases(ac, av, &t);
 	if (dns_resolver(t.ip_name, t.ip_addr, &t.info_addr) == 1)
 		safeExit(&t);
-	printf("addr-> %s\nip->%s", t.ip_name, t.ip_addr);
+	//open_socket();
+	trace(&t);
 	safeExit(&t);
 }
 

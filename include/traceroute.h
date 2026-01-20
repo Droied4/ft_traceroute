@@ -29,6 +29,8 @@ typedef struct s_trace
 	char *ip_name;
 	char ip_addr[INET_ADDRSTRLEN];
 	struct addrinfo *info_addr;
+	int pkg_bytes;
+	int hops;
 } t_trace;
 
 #endif

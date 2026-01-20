@@ -2,8 +2,9 @@
 
 static void safeExit(t_trace *t)
 {
-	if (t->addr)
-		free(t->addr);
+	if (t->ip_name)
+		free(t->ip_name);
+	freeaddrinfo(t->info_addr);
 	exit(1);
 }
 
@@ -88,9 +89,23 @@ static void init(char *av[], t_trace *t)
 	int pos = 0;
 
 	pos = getAddr(av);	
-	t->addr = strdup(av[pos]);
-	if (!t->addr)
+	t->ip_name = strdup(av[pos]);
+	if (!t->ip_name)
 		error("malloc error", t);
+}
+
+static int dns_resolver(char *domain, char *ipstr, struct addrinfo **info)
+{
+	struct addrinfo hint;
+	memset(&hint, 0, sizeof(hint));
+	hint.ai_family = AF_INET;
+	hint.ai_socktype = SOCK_STREAM;
+
+	if (getaddrinfo(domain, NULL, &hint, info) != 0)
+		return (1);
+	struct sockaddr_in *ip = (struct sockaddr_in *)(* info)->ai_addr;
+	inet_ntop(AF_INET, &(ip->sin_addr), ipstr, INET_ADDRSTRLEN);
+	return (0);
 }
 
 static void traceroute(int ac, char *av[]) 
@@ -99,7 +114,9 @@ static void traceroute(int ac, char *av[])
 
 	init (av, &t);
 	flagCases(ac, av, &t);
-	printf("addr-> %s\n", t.addr);
+	if (dns_resolver(t.ip_name, t.ip_addr, &t.info_addr) == 1)
+		safeExit(&t);
+	printf("addr-> %s\nip->%s", t.ip_name, t.ip_addr);
 	safeExit(&t);
 }
 

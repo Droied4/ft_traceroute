@@ -132,12 +132,88 @@ static int dns_resolver(char *domain, char *ipstr, struct addrinfo **info)
 	return (0);
 }
 
-static void trace(t_trace *t)
+static void send_package(t_trace *t, char *payload)
 {
-	printf("traceroute to %s (%s), %i hops max, %i bytes packets\n", t->ip_name, t->ip_addr, t->hops, t->pkg_bytes);
+	if (sendto(t->send_sock, payload, t->pkg_bytes, 0, (struct sockaddr*)&t->sin, sizeof(t->sin)) <= 0)
+		safeExit(t);
 }
 
-static void traceroute(int ac, char *av[]) 
+static int recieve_package(t_trace *t, char *hop_ip)
+{
+	socklen_t raddr_len;
+	char rbuf[sizeof(struct icmphdr) + t->pkg_bytes + sizeof(struct ip)];
+	struct sockaddr_in r_addr;
+
+	raddr_len = sizeof(r_addr);
+	if (recvfrom(t->recv_sock, rbuf, sizeof(rbuf), 0, (struct sockaddr *)&r_addr, &raddr_len) > 0)
+	{
+		struct ip *ip_hdr = (struct ip *)rbuf;
+		int ip_hdr_len = ip_hdr->ip_hl * 4;
+		struct icmphdr *icmp_hdr = (struct icmphdr *)(rbuf + ip_hdr_len);
+
+		inet_ntop(AF_INET, &r_addr.sin_addr, hop_ip, INET_ADDRSTRLEN);
+
+		if (icmp_hdr->type == ICMP_TIME_EXCEEDED)
+			return (1);
+		if (icmp_hdr->type == ICMP_DEST_UNREACH &&
+				icmp_hdr->code == ICMP_PORT_UNREACH)
+			return (2);
+	}	
+	return (0);
+}
+
+static void response(int ttl, long *elapsed, char *hop_ip)
+{
+	//In the future i'll make dns resolver
+	char *hop_name;
+	(void)hop_name;
+	if (!hop_ip[0])
+		printf(" %i  * * * \n", ttl);
+	else
+		printf(" %i  %s (%s) %.3f ms %.3f ms %.3f ms\n", ttl, hop_ip, hop_ip, (double)elapsed[0]/1000, (double)elapsed[1]/1000, (double)elapsed[2]/1000);
+}
+
+static void prepare_package(t_trace *t, int ttl_val)
+{
+	t->sin.sin_family = AF_INET; 	
+	t->sin.sin_port = htons(LONG_PORT + ttl_val);
+	inet_pton(AF_INET, t->ip_addr, (struct in_addr *)&t->sin.sin_addr);
+}
+
+static void trace(t_trace *t)
+{
+	struct timeval start, end, tv_out;
+	long elapsed[3];  
+	int ttl_val = 1, res = 0;
+	char payload[t->pkg_bytes];
+	char hop_ip[INET_ADDRSTRLEN];
+
+	memset(payload, 0, t->pkg_bytes);
+	tv_out.tv_sec = RECV_TIMEOUT;
+	tv_out.tv_usec = 0;
+	printf("traceroute to %s (%s), %i hops max, %i bytes packets\n", t->ip_name, t->ip_addr, t->hops, t->pkg_bytes);
+
+	setsockopt(t->recv_sock, SOL_SOCKET, SO_RCVTIMEO, &tv_out, sizeof(tv_out));
+	for (; ttl_val <= t->hops; ++ttl_val)
+	{
+		hop_ip[0] = '\0';
+		prepare_package(t, ttl_val);
+		for (int i = 0; i < 3; ++i)
+		{
+		  	setsockopt(t->send_sock, SOL_IP, IP_TTL, &ttl_val, sizeof(ttl_val));	
+			gettimeofday(&start, NULL);
+			send_package(t, payload);
+			res = recieve_package(t, hop_ip);
+			gettimeofday(&end, NULL);
+			elapsed[i] = (end.tv_sec - start.tv_sec) * 1000000L + (end.tv_usec - start.tv_usec);
+		}
+		response(ttl_val, elapsed, hop_ip);	
+		if (res == 2)
+			return ;
+	}
+}
+
+static void traceroute(int ac, char *av[])
 {
 	t_trace t;
 

@@ -1,4 +1,4 @@
-#include "traceroute.h" 
+#include "traceroute_bonus.h" 
 
 static void safeExit(t_trace *t)
 {
@@ -118,6 +118,25 @@ static void init(char *av[], t_trace *t)
 	t->pkg_bytes = 60;
 }
 
+static char *reverse_dns_resolver(char *ip_addr, struct sockaddr_in *addr) 
+{
+	socklen_t len;
+	char buf[NI_MAXHOST], *ret_buf;
+
+	addr->sin_addr.s_addr = inet_addr(ip_addr);
+	len = sizeof(struct sockaddr_in);
+
+	if (getnameinfo((struct sockaddr *)addr, len, buf, sizeof(buf), NULL, 0, 0)) 
+	{
+		printf("Could not resolve reverse lookup of hostname\n");	 
+		return (NULL);
+	}
+	ret_buf = (char *)malloc((strlen(buf) + 1) * sizeof(char));
+	if (!ret_buf)
+		return (NULL);
+    strcpy(ret_buf, buf);
+	return(ret_buf);
+}
 
 static int dns_resolver(char *domain, char *ipstr, struct addrinfo **info)
 {
@@ -163,12 +182,16 @@ static int recieve_package(t_trace *t, char *hop_ip)
 	return (0);
 }
 
-static void response(int ttl, long *elapsed, char *hop_ip)
+static void response(int ttl, long *elapsed, char *hop_ip, struct sockaddr_in *addr)
 {
+	char *hop_name;
+
+	hop_name = reverse_dns_resolver(hop_ip, addr);
 	if (!hop_ip[0])
 		printf(" %i  * * * \n", ttl);
 	else
-		printf(" %i  %s (%s) %.3f ms %.3f ms %.3f ms\n", ttl, hop_ip, hop_ip, (double)elapsed[0]/1000, (double)elapsed[1]/1000, (double)elapsed[2]/1000);
+		printf(" %i  %s (%s) %.3f ms %.3f ms %.3f ms\n", ttl, hop_name, hop_ip, (double)elapsed[0]/1000, (double)elapsed[1]/1000, (double)elapsed[2]/1000);
+	free(hop_name);
 }
 
 static void prepare_package(t_trace *t, int ttl_val)
@@ -205,7 +228,7 @@ static void trace(t_trace *t)
 			gettimeofday(&end, NULL);
 			elapsed[i] = (end.tv_sec - start.tv_sec) * 1000000L + (end.tv_usec - start.tv_usec);
 		}
-		response(ttl_val, elapsed, hop_ip);	
+		response(ttl_val, elapsed, hop_ip, &t->sin);	
 		if (res == 2)
 			return ;
 	}

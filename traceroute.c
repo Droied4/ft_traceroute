@@ -14,7 +14,8 @@ static void safeExit(t_trace *t)
 		close(t->recv_sock);	
 		t->recv_sock = -1;
 	}
-	freeaddrinfo(t->info_addr);
+	if (t->info_addr)
+		freeaddrinfo(t->info_addr);
 	exit(1);
 }
 
@@ -116,6 +117,7 @@ static void init(char *av[], t_trace *t)
 	t->recv_sock = open_socket(t, SOCK_RAW, IPPROTO_ICMP);
 	t->hops = 30;
 	t->pkg_bytes = 60;
+	t->info_addr = NULL;
 }
 
 

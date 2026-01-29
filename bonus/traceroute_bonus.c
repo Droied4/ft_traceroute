@@ -14,7 +14,8 @@ static void safeExit(t_trace *t)
 		close(t->recv_sock);	
 		t->recv_sock = -1;
 	}
-	freeaddrinfo(t->info_addr);
+	if (t->info_addr)
+		freeaddrinfo(t->info_addr);
 	exit(1);
 }
 
@@ -30,6 +31,10 @@ static void usage(void)
 		  "\tping [options] <destination>\n"
 		  "Options:\n" 
 		  "-h \t\t display help\n"
+		  "-m \t\t max number of hops\n"
+		  "-p \t\t specifies the destination port\n"
+		  "-s \t\t chooses an alternative source address\n"
+		  "-q \t\t sets the number of probe packets per hop. The default is 3\n"
 		  );
 	exit(1);
 }
@@ -44,24 +49,56 @@ static char options_allowed(char *str, char ch)
 	return (1);
 }
 
-static char mini_getopt(int ac, char *av[], char *str)
+static char mini_getopt(int ac, char *av[], char **opt_value, char *str)
 {
+	char ch;
+
 	for (int i = 0; i < ac; ++i)
 	{
 		for (unsigned int j = 0; j < strlen(av[i]); ++j)
 		{
 			if (av[i][j] == '-')
-				return 	(options_allowed(str, av[i][j + 1]));
+			{
+				ch = options_allowed(str, av[i][j + 1]);
+				if ((i + 1) < ac)
+					*opt_value = strdup(av[i + 1]);
+				return (ch);
+			}
 		}
 	}
+	return (0);
+}
+
+static int is_number(char *str)
+{
+	for (size_t i = 0; i < strlen(str); ++i)
+	{
+		if (!isdigit(str[i]))
+			return (1);
+	}
+	return (0);
+}
+
+static int update_trace(int *value, char *str)
+{
+	int res;
+	res = 0;
+	if (!str)
+		return (1);
+	if (is_number(str))
+		return (1);
+	res = atoi(str);
+	*value = res;
 	return (0);
 }
 
 static void flagCases(int ac, char *av[], t_trace *t)
 {
 	int ch;
+	char *opt;
+	opt = NULL;
 
-	ch = mini_getopt(ac, av, COMMON_OPTSTR);
+	ch = mini_getopt(ac, av, &opt, COMMON_OPTSTR);
 	switch (ch)
 	{
 		case 0: 
@@ -71,6 +108,22 @@ static void flagCases(int ac, char *av[], t_trace *t)
 			break ;
 		case 'h':
 			usage();
+			break ;
+		case 'm' :
+			if (update_trace(&t->hops, opt))
+				error("invalid argument for the option", t);
+			break ;
+		case 'p' :
+			if (update_trace(&t->port, opt))
+				error("invalid argument for the option", t);
+			break ;
+		case 's' :
+			usage();
+			//alternative source addr
+			break ;
+		case 'q' :
+			if (update_trace(&t->pkg_x_hop, opt))
+				error("invalid argument for the option", t);
 			break ;
 	}
 }
@@ -112,9 +165,12 @@ static void init(char *av[], t_trace *t)
 	t->ip_name = strdup(av[pos]);
 	if (!t->ip_name)
 		error("malloc error", t);
+	t->info_addr = NULL;
 	t->send_sock = open_socket(t, SOCK_DGRAM, IPPROTO_UDP);
 	t->recv_sock = open_socket(t, SOCK_RAW, IPPROTO_ICMP);
 	t->hops = 30;
+	t->port = 33434;
+	t->pkg_x_hop = 3;
 	t->pkg_bytes = 60;
 }
 
@@ -197,7 +253,7 @@ static void response(int ttl, long *elapsed, char *hop_ip, struct sockaddr_in *a
 static void prepare_package(t_trace *t, int ttl_val)
 {
 	t->sin.sin_family = AF_INET; 	
-	t->sin.sin_port = htons(LONG_PORT + ttl_val);
+	t->sin.sin_port = htons(t->port + ttl_val);
 	inet_pton(AF_INET, t->ip_addr, (struct in_addr *)&t->sin.sin_addr);
 }
 
@@ -234,6 +290,17 @@ static void trace(t_trace *t)
 	}
 }
 
+static int manage_funny_people(t_trace *t)
+{
+	if (t->hops <= 0)
+		error("firts hop out of range", t);
+	if (t->hops > 255)
+		error("max hops cannot be more than 255", t);
+	if (t->port < 0 || t->port >= 65534)
+		error("the original works changing the port value. \ni'm not going to do that, try with a valid port :D", t);
+	return (1);
+}
+
 static void traceroute(int ac, char *av[])
 {
 	t_trace t;
@@ -242,6 +309,7 @@ static void traceroute(int ac, char *av[])
 	flagCases(ac, av, &t);
 	if (dns_resolver(t.ip_name, t.ip_addr, &t.info_addr) == 1)
 		safeExit(&t);
+	manage_funny_people(&t);
 	trace(&t);
 	safeExit(&t);
 }

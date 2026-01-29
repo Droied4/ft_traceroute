@@ -238,15 +238,24 @@ static int recieve_package(t_trace *t, char *hop_ip)
 	return (0);
 }
 
-static void response(int ttl, long *elapsed, char *hop_ip, struct sockaddr_in *addr)
+static void response(int ttl, long *elapsed, int len_elapsed, char *hop_ip, struct sockaddr_in *addr)
 {
 	char *hop_name;
 
 	hop_name = reverse_dns_resolver(hop_ip, addr);
 	if (!hop_ip[0])
-		printf(" %i  * * * \n", ttl);
+	{
+		printf(" %i ", ttl);
+		for (int i = 0; i < len_elapsed; ++i)
+			printf(" *");
+	}
 	else
-		printf(" %i  %s (%s) %.3f ms %.3f ms %.3f ms\n", ttl, hop_name, hop_ip, (double)elapsed[0]/1000, (double)elapsed[1]/1000, (double)elapsed[2]/1000);
+	{
+		printf(" %i  %s (%s)", ttl, hop_name, hop_ip);
+		for (int i = 0; i < len_elapsed; ++i)
+			printf(" %.3f ms ", (double)elapsed[i]/1000);
+	}
+	printf("\n");
 	free(hop_name);
 }
 
@@ -260,7 +269,7 @@ static void prepare_package(t_trace *t, int ttl_val)
 static void trace(t_trace *t)
 {
 	struct timeval start, end, tv_out;
-	long elapsed[3];  
+	long elapsed[t->pkg_x_hop];  
 	int ttl_val = 1, res = 0;
 	char payload[t->pkg_bytes];
 	char hop_ip[INET_ADDRSTRLEN];
@@ -275,7 +284,7 @@ static void trace(t_trace *t)
 	{
 		hop_ip[0] = '\0';
 		prepare_package(t, ttl_val);
-		for (int i = 0; i < 3; ++i)
+		for (int i = 0; i < t->pkg_x_hop; ++i)
 		{
 		  	setsockopt(t->send_sock, SOL_IP, IP_TTL, &ttl_val, sizeof(ttl_val));	
 			gettimeofday(&start, NULL);
@@ -284,13 +293,13 @@ static void trace(t_trace *t)
 			gettimeofday(&end, NULL);
 			elapsed[i] = (end.tv_sec - start.tv_sec) * 1000000L + (end.tv_usec - start.tv_usec);
 		}
-		response(ttl_val, elapsed, hop_ip, &t->sin);	
+		response(ttl_val, elapsed, t->pkg_x_hop, hop_ip, &t->sin);	
 		if (res == 2)
 			return ;
 	}
 }
 
-static int manage_funny_people(t_trace *t)
+static void manage_funny_people(t_trace *t)
 {
 	if (t->hops <= 0)
 		error("firts hop out of range", t);
@@ -298,7 +307,8 @@ static int manage_funny_people(t_trace *t)
 		error("max hops cannot be more than 255", t);
 	if (t->port < 0 || t->port >= 65534)
 		error("the original works changing the port value. \ni'm not going to do that, try with a valid port :D", t);
-	return (1);
+	if (t->pkg_x_hop <= 0 || t->pkg_x_hop > 10)
+		error("no more than 10 probes per hop", t); 
 }
 
 static void traceroute(int ac, char *av[])

@@ -33,7 +33,7 @@ static void usage(void)
 		  "-h \t\t display help\n"
 		  "-m \t\t max number of hops\n"
 		  "-p \t\t specifies the destination port\n"
-		  "-s \t\t chooses an alternative source address\n"
+		  "-f \t\t specifies with what ttl to start. default to 1\n"
 		  "-q \t\t sets the number of probe packets per hop. The default is 3\n"
 		  );
 	exit(1);
@@ -117,9 +117,9 @@ static void flagCases(int ac, char *av[], t_trace *t)
 			if (update_trace(&t->port, opt))
 				error("invalid argument for the option", t);
 			break ;
-		case 's' :
-			usage();
-			//alternative source addr
+		case 'f' :
+			if (update_trace(&t->ttl_val, opt))
+				error("invalid argument for the option", t);
 			break ;
 		case 'q' :
 			if (update_trace(&t->pkg_x_hop, opt))
@@ -165,6 +165,7 @@ static void init(char *av[], t_trace *t)
 	t->ip_name = strdup(av[pos]);
 	if (!t->ip_name)
 		error("malloc error", t);
+	t->ttl_val = 1;
 	t->info_addr = NULL;
 	t->send_sock = open_socket(t, SOCK_DGRAM, IPPROTO_UDP);
 	t->recv_sock = open_socket(t, SOCK_RAW, IPPROTO_ICMP);
@@ -259,10 +260,10 @@ static void response(int ttl, long *elapsed, int len_elapsed, char *hop_ip, stru
 	free(hop_name);
 }
 
-static void prepare_package(t_trace *t, int ttl_val)
+static void prepare_package(t_trace *t)
 {
 	t->sin.sin_family = AF_INET; 	
-	t->sin.sin_port = htons(t->port + ttl_val);
+	t->sin.sin_port = htons(t->port + t->ttl_val);
 	inet_pton(AF_INET, t->ip_addr, (struct in_addr *)&t->sin.sin_addr);
 }
 
@@ -270,7 +271,7 @@ static void trace(t_trace *t)
 {
 	struct timeval start, end, tv_out;
 	long elapsed[t->pkg_x_hop];  
-	int ttl_val = 1, res = 0;
+	int res = 0;
 	char payload[t->pkg_bytes];
 	char hop_ip[INET_ADDRSTRLEN];
 
@@ -280,20 +281,20 @@ static void trace(t_trace *t)
 	printf("traceroute to %s (%s), %i hops max, %i bytes packets\n", t->ip_name, t->ip_addr, t->hops, t->pkg_bytes);
 
 	setsockopt(t->recv_sock, SOL_SOCKET, SO_RCVTIMEO, &tv_out, sizeof(tv_out));
-	for (; ttl_val <= t->hops; ++ttl_val)
+	for (; t->ttl_val <= t->hops; ++t->ttl_val)
 	{
 		hop_ip[0] = '\0';
-		prepare_package(t, ttl_val);
+		prepare_package(t);
 		for (int i = 0; i < t->pkg_x_hop; ++i)
 		{
-		  	setsockopt(t->send_sock, SOL_IP, IP_TTL, &ttl_val, sizeof(ttl_val));	
+		  	setsockopt(t->send_sock, SOL_IP, IP_TTL, &t->ttl_val, sizeof(t->ttl_val));	
 			gettimeofday(&start, NULL);
 			send_package(t, payload);
 			res = recieve_package(t, hop_ip);
 			gettimeofday(&end, NULL);
 			elapsed[i] = (end.tv_sec - start.tv_sec) * 1000000L + (end.tv_usec - start.tv_usec);
 		}
-		response(ttl_val, elapsed, t->pkg_x_hop, hop_ip, &t->sin);	
+		response(t->ttl_val, elapsed, t->pkg_x_hop, hop_ip, &t->sin);	
 		if (res == 2)
 			return ;
 	}
@@ -309,6 +310,8 @@ static void manage_funny_people(t_trace *t)
 		error("the original works changing the port value. \ni'm not going to do that, try with a valid port :D", t);
 	if (t->pkg_x_hop <= 0 || t->pkg_x_hop > 10)
 		error("no more than 10 probes per hop", t); 
+	if (t->ttl_val <= 0 || t->ttl_val > 30)
+		error("first hop out of range", t);
 }
 
 static void traceroute(int ac, char *av[])

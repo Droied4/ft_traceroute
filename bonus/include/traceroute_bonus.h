@@ -13,7 +13,7 @@
 # include <arpa/inet.h>
 # include <sys/time.h>
 
-# define COMMON_OPTSTR "hmpsq"
+# define COMMON_OPTSTR "hmpfq"
 # define LONG_PORT 33434
 # define RECV_TIMEOUT 1
 
@@ -30,6 +30,7 @@ typedef struct s_trace
 	int port;
 	int hops;
 	int pkg_x_hop;
+	int ttl_val;
 	} t_trace;
 
 #endif

@@ -28,7 +28,7 @@ static void error(char *msg, t_trace *t)
 static void usage(void)
 {
 	printf("Usage\n" 
-		  "\tping [options] <destination>\n"
+		  "\ttraceroute [options] <destination>\n"
 		  "Options:\n" 
 		  "-h \t\t display help\n"
 		  "-m \t\t max number of hops\n"

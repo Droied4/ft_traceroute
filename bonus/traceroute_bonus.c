@@ -138,7 +138,7 @@ static int getAddr(char *av[])
 		if (av[i][0] == '-')
 		{
 			if (!(av[i + 2]))
-				return (i + 1);
+				return (-1);
 			else
 				return (i + 2);
 		}
@@ -161,12 +161,15 @@ static void init(char *av[], t_trace *t)
 {
 	int pos = 0;
 
+	t->ip_name = NULL;
+	t->info_addr = NULL;
 	pos = getAddr(av);	
+	if (pos < 0)
+		safeExit(t);
 	t->ip_name = strdup(av[pos]);
 	if (!t->ip_name)
 		error("malloc error", t);
 	t->ttl_val = 1;
-	t->info_addr = NULL;
 	t->send_sock = open_socket(t, SOCK_DGRAM, IPPROTO_UDP);
 	t->recv_sock = open_socket(t, SOCK_RAW, IPPROTO_ICMP);
 	t->hops = 30;
